@@ -44,7 +44,7 @@ class Solver():
     embedding_func: EmbeddingFunc = field(default_factory=lambda: openai_embedding)
     embedding_batch_num: int = 64
     embedding_func_max_async: int = 32
-    consine_better_than_threshold = 0.6,
+    consine_better_than_threshold = 0.6
 
     # LLM
     llm_model_func: callable = gpt_41_mini_complete
@@ -52,13 +52,37 @@ class Solver():
     llm_model_max_async: int = 8
 
     #Storage
+    vector_db_storage_cls: Type[BaseVectorStorage] = NanoVectorDBStorage
     
     # Other arguments
-    max_step = 10,
+    max_step = 10
+    always_create_working_dir = True
+    addon_params: dict = field(default_factory=dict)
 
     def __post_init__():
+        _print_config = ",\n  ".join([f"{k} = {v}" for k, v in asdict(self).items()])
+        logger.debug(f"Cure Bench Project initial param:\n\n  {_print_config}\n")
 
-        return
+        if not os.path.exists(self.working_dir) and self.always_create_working_dir:
+            logger.info(f"Creating working directory {self.working_dir}")
+            os.makedirs(self.working_dir)
+        
+        self.embedding_func = limit_async_func_call(self.embedding_func_max_async)(
+            self.embedding_func
+        )
+        
+        self.tooluniverse_vdb: BaseVectorStorage = (
+            self.vector_db_storage_cls(
+                namespace="tooluniverse",
+                global_config=asdict(self),
+                embedding_func=self.embedding_func,
+                meta_fields = {}
+            )
+        )
+
+        self.llm_model_func = limit_async_func_call(self.llm_model_max_async)(
+            self.llm_model_func
+        )
 
 
     async def helper(question: str, reasoning: list[str]) -> str:
