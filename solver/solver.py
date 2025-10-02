@@ -1,0 +1,80 @@
+#Filename:	solver.py
+#Author:	Wang Yongjie
+#Email:		yongjie.wang@ntu.edu.sg
+#Date:		Thu 02 Oct 2025 02:48:15 PM CST
+
+import asyncio
+import os
+from dataclasses import asdict, dataclass, field
+from datetime import datetime
+from functools import partial
+from typing import Callable, Dict, List, Optional, Type, Union, cast
+from prompt import *
+
+from .base import (
+    StorageNameSpace,
+    BaseVectorStorage,
+    BaseLexicalStorage
+)
+
+from .storage import (
+    NanoVectorDBStorage,
+)
+
+from .utils import (
+    EmbeddingFunc,
+    compute_mdhash_id,
+    limit_async_func_call,
+    always_get_an_event_loop,
+    logger,
+)
+
+from .llm import (
+    gpt_4o_complete,
+    gpt_41_mini_complete,
+    openai_embedding,
+    vllm_local_complete,
+    vllm_local_embedding,
+)
+
+@dataclass 
+class Solver():
+    # text embedding
+    working_dir = "storage",
+    embedding_func: EmbeddingFunc = field(default_factory=lambda: openai_embedding)
+    embedding_batch_num: int = 64
+    embedding_func_max_async: int = 32
+    consine_better_than_threshold = 0.6,
+
+    # LLM
+    llm_model_func: callable = gpt_41_mini_complete
+    llm_model_max_token_size: int = 32768
+    llm_model_max_async: int = 8
+
+    #Storage
+    
+    # Other arguments
+    max_step = 10,
+
+    def __post_init__():
+
+        return
+
+
+    async def helper(question: str, reasoning: list[str]) -> str:
+
+        return
+    
+    async def thoughts() -> str:
+        return
+    
+    async def toolrag(question: str) -> list(str):
+
+        return 
+
+    async def generate(question: str):
+        for i in range(self.max_step):
+
+
+        return
+
