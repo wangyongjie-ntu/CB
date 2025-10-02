@@ -86,9 +86,27 @@ class Solver():
 
 
     async def helper(question: str, reasoning: list[str]) -> str:
+        """
+         generate the hints for the next step.
+        """
+        prompt_template = PROMPTS["helper"]
+        context = dict(
+            question = question,
+            reasoning=";".join(reasoning)
+        )
+        use_prompt = prompt_template.format(**context_base)
+        results = await use_llm_func(use_prompt) # response_format={"type": "json_object"})
+        
+        # Parse results
+        pattern = re.compile(r'output:\s*(.*)', re.IGNORECASE | re.DOTALL)
+        match = pattern.search(results)
 
-        return
-    
+        if match:
+            clean_result = match.group(1).strip()
+            return clean_result
+        else:
+            return results
+
     async def thoughts() -> str:
         return
     
