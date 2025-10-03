@@ -20,6 +20,17 @@ Next reasoning step(hints only):
 Output: 
 """
 
+PROMPTS["init_tools"] = """
+
+
+Given Input:
+Question: {question}
+Tool lists: {list_of_tools}
+
+Selected Tools (seperated by comma):
+Output:
+"""
+
 PROMPTS["solver"] = """
 You must fully understand and solve a question through reasoning and function calls.
 

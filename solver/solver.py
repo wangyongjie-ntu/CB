@@ -84,11 +84,9 @@ class Solver():
             self.llm_model_func
         )
 
-
     async def helper(question: str, reasoning: list[str]) -> str:
-        """
-         generate the hints for the next step.
-        """
+        # generate the hints for the next step.
+
         prompt_template = PROMPTS["helper"]
         context = dict(
             question = question,
@@ -106,16 +104,80 @@ class Solver():
             return clean_result
         else:
             return results
-
-    async def thoughts() -> str:
-        return
     
-    async def toolrag(question: str) -> list(str):
+    async def init_tools(question: str) -> list[str]:
+        # select top-20 tools from all 215 tools.
 
-        return 
+        prompt_template = PROMPTS["init_thought"]
+        context = dict(
+            question = question,
+            tools=";".join(reasoning)
+        )
+        use_prompt = prompt_template.format(**context_base)
+        results = await use_llm_func(use_prompt) # response_format={"type": "json_object"})
+        
+        # Parse results
+        return tools
 
+    async def toolrag(reasoning)-> list(str):
+        ktools = rag.query(reasoning)
+        return ktools
+
+    async def judge_tools(question, hint, retrieved_content):
+        # Levarge LLM to judge whether retrieved content match the question.
+
+        return True
+
+    async def extract_useful_info(question, hint, retrieved_content):
+        # Leverage LLM to keep the useful information.
+        prompt + LLM
+        return summary
+
+    async def thoughts(function_list: list[str], question:str, prev_reason:str, hint:str):
+        # Leverage LLM to provide potential tools
+
+        return reasoning, avail_tools
+    
     async def generate(question: str):
+        reasoning_trace = {}
+        tool_trace = {}
+        init_tools = await self.init_tools(question)
+        trigger = 0
+
         for i in range(self.max_step):
+            hint = await helper(question, reasoning_trace) # produce hints
+            # produce tools and reasoning
+            reasoning_trace, toolist = await self.thoughts(question, reasoning_trace, hint, init_tools)
+
+            if finish in toolist:
+                # call the finish tool and generate the final answers.
+                return reasoning, answer
+            else:
+                retrieved_content = ""
+                for tool in toolist:
+                    content = toolcall()
+                    retrieved_content += content
+
+                flag = await self.judge_tools(question, hint, retrieved_content)
+
+                if flag: 
+                    tool_trace = tool_trace + toolist
+                    useinfo = await self.extract_useful_info(question, hint, retrieved_content)
+                    reasoning = reasoning + useinfo
+                else:
+                    tool_trace = tool_trace + toolist # avoid produce the same toolist
+                    trigger += 1
+
+                if trigger > 1:
+                    new_tools = await self.toolrag(reasoning_trace, tooluniverse)
+                    init_tools = init_tools + new_tools
+                else:
+                    tool_trace = tool_trace # remove preivous unuseful tools
+                    continue
+
+        return reasoning, answer
+
+
 
 
         return
