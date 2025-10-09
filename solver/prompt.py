@@ -1,7 +1,7 @@
-#Filename:	prompt.py
-#Author:	Wang Yongjie
-#Email:		yongjie.wang@ntu.edu.sg
-#Date:		Thu 02 Oct 2025 02:47:30 PM CST
+# Filename:	prompt.py
+# Author:	Wang Yongjie
+# Email:	yongjie.wang@ntu.edu.sg
+# Date:		Thu 02 Oct 2025 02:47:30 PM CST
 
 PROMPTS = {}
 GRAPH_FIELD_SEP = "<SEP>"
@@ -50,9 +50,35 @@ Function List: {description}
 Reasoning step (json): {reasoning step format}
 Previous reasoning steps: {previous multi-step reasoning trace}
 Hint for next step: {hint}
+Question: {question}
 For the final step, respond in this JSON format, providing the final answer and a detailed
+
+Output:
+Final Answer (json): {final answer format}
+reasoning process: 
 """
 
-PROMPTS["reflection"] = """
-xxxx
+PROMPTS["judge_tool"] = """
+Please act as a reasoning assistant that judges whether the retrieved content is useful for answering the clinical/medical question.
+
+Given Input:
+Question: {question}
+Hint: {hint}
+Retrieved content: {retrieved_content}
+
+Is the retrieved content useful for answering the question? Answer "True" or "False".
+Output:
+"""
+
+
+PROMPTS["extract_useful_info"] = """
+Please act as a reasoning assistant that extracts useful information from the retrieved content to help answer the clinical/medical question. You should focus on identifying and retaining only the information that is directly relevant to the question, while discarding any extraneous details.
+
+Given Input:
+Question: {question}
+Hint: {hint}
+Retrieved content: {retrieved_content}
+
+Provide the useful information extracted from the retrieved content:
+output:
 """
