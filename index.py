@@ -23,7 +23,7 @@ EMBED_MODEL = SentenceTransformer(
 async def local_embedding(texts: list[str]) -> np.ndarray:
     return EMBED_MODEL.encode(texts, normalize_embeddings=True)
 
-storage =  NanoVectorDBStorage(namespace = "tooluniverse", embedding_func = local_embedding, meta_fields = {}, global_config = {"working_dir": "solver/storage", "embedding_batch_num":32})
+storage =  NanoVectorDBStorage(namespace = "tooluniverse", embedding_func = openai_embedding, meta_fields = {}, global_config = {"working_dir": "solver/storage", "embedding_batch_num":32})
 loop = always_get_an_event_loop()
 
 if __name__ == "__main__":

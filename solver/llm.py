@@ -8,10 +8,11 @@ from tenacity import (
     retry_if_exception_type,
 )
 import os
-from .utils import wrap_embedding_func_with_attrs
+from utils import wrap_embedding_func_with_attrs, always_get_an_event_loop,limit_async_func_call
 
 global_openai_async_client = None
 global_vllm_async_client = None
+
 
 def get_openai_async_client_instance():
     global global_openai_async_client
@@ -19,11 +20,13 @@ def get_openai_async_client_instance():
         global_openai_async_client = AsyncOpenAI()
     return global_openai_async_client
 
+
 def get_vllm_async_client_instance(base_url:str = None, api_key:str = None):
     global global_vllm_async_client
     if global_vllm_async_client is None:
         global_vllm_async_client = AsyncOpenAI( base_url = base_url, api_key = api_key)
     return global_vllm_async_client
+
 
 @retry(
     stop=stop_after_attempt(5),
@@ -45,6 +48,7 @@ async def openai_complete_if_cache(
 
     return response.choices[0].message.content
 
+
 async def gpt_4o_complete(
     prompt, system_prompt=None, history_messages=[], **kwargs
 ) -> str:
@@ -56,6 +60,7 @@ async def gpt_4o_complete(
         **kwargs,
     )
 
+
 async def gpt_41_mini_complete(
     prompt, system_prompt=None, history_messages=[], **kwargs
 ) -> str:
@@ -66,6 +71,7 @@ async def gpt_41_mini_complete(
         history_messages=history_messages,
         **kwargs,
     )
+
 
 @wrap_embedding_func_with_attrs(embedding_dim=1536, max_token_size=8192)
 @retry(
@@ -100,6 +106,7 @@ async def vllm_openai_complete_if_cache(
         model=deployment_name, messages=messages, **kwargs)
     return response.choices[0].message.content
 
+
 async def vllm_local_complete(
     prompt, system_prompt=None, history_messages=[], **kwargs
 ) -> str:
@@ -110,6 +117,7 @@ async def vllm_local_complete(
         history_messages=history_messages,
         **kwargs,
     )
+
 
 @wrap_embedding_func_with_attrs(embedding_dim=1000, max_token_size=8192)
 @retry(
@@ -123,3 +131,9 @@ async def vllm_local_embedding(texts: list[str]) -> np.ndarray:
         model="bge-m3", input=texts, encoding_format="float"
     )
     return np.array([dp.embedding for dp in response.data])
+
+
+if __name__ == "__main__":
+    loop = always_get_an_event_loop()
+    llm_model_func = limit_async_func_call(3)(gpt_41_mini_complete)
+    print(loop.run_until_complete(llm_model_func("who are you")))

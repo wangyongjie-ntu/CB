@@ -11,13 +11,12 @@ from dataclasses import dataclass
 from collections import Counter, defaultdict
 from typing import Any, Union, cast
 from nano_vectordb import NanoVectorDB
-from .base import (
+from base import (
     StorageNameSpace,
     BaseVectorStorage,
     BaseLexicalStorage
 )
-
-from .utils import (
+from utils import (
     logger,
     set_logger,
     compute_mdhash_id
@@ -25,11 +24,11 @@ from .utils import (
 
 @dataclass
 class NanoVectorDBStorage(BaseVectorStorage):
-    cosine_better_than_threshold: float = 0.6
-
+    cosine_better_than_threshold: float = 0.1
     def __post_init__(self):
+        print(self.global_config)
         self._client_file_name = os.path.join(
-            self.global_config["working_dir"], f"vdb_{self.namespace}.json"
+            self.global_config["working_dir"], f"vdb_tooluniverse.json"
         )
         self._max_batch_size = self.global_config["embedding_batch_num"]
         self._client = NanoVectorDB(
@@ -72,6 +71,7 @@ class NanoVectorDBStorage(BaseVectorStorage):
     async def query(self, query: str, top_k = 5):
         embedding = await self.embedding_func([query])
         embedding = embedding[0]
+        # print("\033[31mQuery Embedding: \033[0m",embedding)
         results = self._client.query(
             query=embedding,
             top_k=top_k,

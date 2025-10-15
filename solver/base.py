@@ -7,14 +7,15 @@ import bm25s
 import numpy as np
 from dataclasses import dataclass, field
 from typing import TypedDict, Union, Literal, Generic, TypeVar
-from .utils import EmbeddingFunc
+from utils import EmbeddingFunc
 
 T = TypeVar("T")
 
 @dataclass
 class StorageNameSpace:
-    namespace: str
     global_config: dict
+    namespace: str
+
     async def index_start_callback(self):
         """commit the storage operations after indexing"""
         pass
@@ -31,6 +32,7 @@ class StorageNameSpace:
 class BaseVectorStorage(StorageNameSpace):
     embedding_func: EmbeddingFunc
     meta_fields: set = field(default_factory=set)
+    # working_dir: str = "./storage"
 
     async def query(self, query:str, top_k:int) -> list[str]:
         raise NotImplementedError

@@ -10,6 +10,7 @@ import logging
 import numpy as np
 from hashlib import md5
 from dataclasses import dataclass, field
+from functools import wraps
 
 logger = logging.getLogger("Index system")
 ENCODER = None

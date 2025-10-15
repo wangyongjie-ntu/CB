@@ -2,7 +2,6 @@
 # Author:	Wang Yongjie
 # Email:	yongjie.wang@ntu.edu.sg
 # Date:		Thu 02 Oct 2025 02:48:15 PM CST
-
 import asyncio
 import re
 import os
@@ -13,6 +12,7 @@ from datetime import datetime
 from functools import partial, wraps
 from typing import Callable, Dict, List, Optional, Type, Union, cast
 
+# from tool import Tool
 from prompt import PROMPTS
 from base import (
     StorageNameSpace,
@@ -38,30 +38,46 @@ from llm import (
 )
 
 
+def normalize_to_text(x) -> str:
+    if isinstance(x, str):
+        return x
+    if isinstance(x, (list, tuple)):
+        parts = []
+        for item in x:
+            txt = normalize_to_text(item)
+            if txt:
+                parts.append(txt)
+        return "\n".join(parts)
+    if isinstance(x, dict):
+        try:
+            return json.dumps(x, ensure_ascii=False)
+        except Exception:
+            return str(x)
+    # 其它类型（数值、None、自定义对象）兜底
+    return str(x)
+
+
 @dataclass
 class Solver():
-    # text embedding
-    working_dir = "storage"
+    # namespace: str = "tooluniverse"
+    working_dir: str = "storage"
     embedding_func: EmbeddingFunc = field(default_factory=lambda: openai_embedding)
     embedding_batch_num: int = 64
     embedding_func_max_async: int = 32
-    cosine_better_than_threshold: float = 0.6
+    cosine_better_than_threshold: float = 0
 
-    llm_model_func: callable = vllm_local_complete
-    llm_model_name: str = "llama-3.1-8b"
+    llm_model_func: callable = gpt_41_mini_complete
+    llm_model_name: str = ""
     llm_model_max_token_size: int = 32768
     llm_model_max_async: int = 8
 
     # Storage
     vector_db_storage_cls: Type[BaseVectorStorage] = NanoVectorDBStorage
-
+    
     # Other arguments
-    max_step: int = 10
+    max_step: int = 5
     always_create_working_dir: bool = True
     addon_params: dict = field(default_factory=dict)
-
-    vllm_base_url: str = "http://localhost:8000/v1"
-    vllm_api_key: str = "EMPTY"
 
     def __post_init__(self):
         _print_config = ",\n  ".join([f"{k} = {v}" for k, v in asdict(self).items()])
@@ -86,27 +102,25 @@ class Solver():
 
     async def use_llm_func(self, prompt: str, system_prompt: Optional[str] = None,
                            response_format: Optional[dict] = None) -> str:
-        try:
-            return await self.llm_model_func(
-                prompt=prompt,
-                system_prompt=system_prompt,
-                response_format=response_format if response_format else {}
-            )
-        except Exception as e:
-            logger.error(f"LLM调用出错: {str(e)}")
-            return ""
+        return await self.llm_model_func(
+            prompt=prompt,
+            system_prompt=system_prompt,
+            response_format=response_format if response_format else {}
+        )
+
 
     async def helper(self, question: str, reasoning: list[str]) -> str:
-        # generate the hints for the next step.
         prompt_template = PROMPTS["helper"]
         context = dict(
             question=question,
             reasoning=";".join(reasoning)
         )
-        use_prompt = prompt_template.format(**context)
-        results = await self.use_llm_func(use_prompt)  # response_format={"type": "json_object"})
+        user_prompt = prompt_template.format(**context)
+        results = await self.llm_model_func(
+            prompt= user_prompt,
 
-        # Parse results
+        )
+
         pattern = re.compile(r'output:\s*(.*)', re.IGNORECASE | re.DOTALL)
         match = pattern.search(results)
 
@@ -125,56 +139,54 @@ class Solver():
         prompt_template = PROMPTS["init_tools"]
         context = dict(
             question=question,
-            list_of_tools=";".join(tool_descriptions)
+            list_of_tools=";".join(tool_descriptions),
+            selected_tools_format='{"tools": ["..."]}'
         )
         use_prompt = prompt_template.format(**context)
-        results = await self.use_llm_func(use_prompt)
-
-        pattern = re.compile(r'Selected Tools.*?:\s*(.*)', re.IGNORECASE | re.DOTALL)
-        match = pattern.search(results)
-
-        if match:
-            tools_str = match.group(1).strip()
-            tools = [tool.strip() for tool in tools_str.split(',')]
+        results = await self.use_llm_func(use_prompt, response_format={"type": "json_object"})
+        print(results)
+        data = json.loads(results)
+        tools = data.get("tools", [])
+        try:
+            data = json.loads(results)
+            tools = data.get("tools", [])
             return tools[:20]
-        return []
+        except Exception as e:
+            logger.error(f"Init Tools Error: {str(e)}")
+            return []
 
     async def toolrag(self, reasoning: str) -> list[str]:
         try:
             results = await self.tooluniverse_vdb.query(reasoning, top_k=5)
+            print("ToolRAG Results: ", results)
             return [result.get('name') for result in results if 'name' in result]
         except Exception as e:
             logger.error(f"ToolRAG Search Error: {str(e)}")
             return []
 
     async def judge_tools(self, question: str, hint: str, retrieved_content: str) -> Optional[bool]:
-        # Levarge LLM to judge whether retrieved content match the question.
         prompt_template = PROMPTS["judge_tool"]
         context = dict(
             question=question,
             hint=hint,
-            retrieved_content=retrieved_content
+            retrieved_content=retrieved_content,
+            judge_format='{"judge": <bool>}'
         )
         prompt = prompt_template.format(**context)
-        results = await self.use_llm_func(prompt)
+        results = await self.use_llm_func(prompt, response_format={"type": "json_object"})
 
-        pattern = re.compile(r'output:\s*(.*)', re.IGNORECASE | re.DOTALL)
-        match = pattern.search(results)
-
-        flag = None
-        if match:
-            output_content = match.group(1).strip()
-            bool_match = re.search(r'\b(true|false)\b', output_content, re.IGNORECASE)
-            if bool_match:
-                flag = bool_match.group(1).lower() == 'true'
-            else:
-                logger.warning(f"无法提取: {output_content}")
-
-        assert flag is None or isinstance(flag, bool), "flag必须是布尔值或None"
-        return flag
+        data = json.loads(results)
+        val = data.get("judge")
+        if isinstance(val, bool):
+            return val
+        if isinstance(val, str):
+            val_lower = val.lower().strip()
+            if val_lower in ("true", "yes", "1"):
+                return True
+            elif val_lower in ("false", "no", "0"):
+                return False
 
     async def extract_useful_info(self, question: str, hint: str, retrieved_content: str) -> str:
-        # Leverage LLM to keep the useful information.
         prompt_template = PROMPTS["extract_useful_info"]
         context = dict(
             question=question,
@@ -182,7 +194,7 @@ class Solver():
             retrieved_content=retrieved_content
         )
         prompt = prompt_template.format(**context)
-        results = await self.use_llm_func(prompt)
+        results = await self.use_llm_func(prompt, response_format={"type": "text"})
 
         pattern = re.compile(r'output:\s*(.*)', re.IGNORECASE | re.DOTALL)
         match = pattern.search(results)
@@ -197,82 +209,134 @@ class Solver():
 
         Tooluniverse = tooluniverse.ToolUniverse()
         Tooluniverse.load_tools()
-        tool_descriptions = []
-        for tool_name in function_list:
-            tool = Tooluniverse.get_tool_by_name([tool_name])
-            if tool:
-                tool_descriptions.append(f"{tool[0]['name']}: {tool[0]['description']}")
+
+        filtered_tools = []
+        for name in function_list:
+            tools = Tooluniverse.get_tool_by_name([name])
+            if tools:
+                filtered_tools.append(tools[0])
+                print("Filtered Tool Add: ", tools[0])
+
+        tool_descriptions = Tooluniverse.prepare_tool_prompts(filtered_tools)
+        print("Tool Descriptions: ", tool_descriptions)
 
         context = dict(
-            description=";".join(tool_descriptions),
-            reasoning_step_format='{"reasoning": "...", "tools": ["..."]}',
+            description=tool_descriptions,
+            reasoning_step_format=json.dumps(
+                {
+                    "reasoning": "...",
+                    "function_calls": [
+                        {"name": "...", "arguments": {"param": "..."}}
+                    ],
+                    "final_answer": ""
+                },
+            ),
             previous_multi_step_reasoning_trace=";".join(prev_reason),
             hint=hint,
             question=question,
             Description_of_ToolRAG_and_virtual_ToolRAG_tools="""ToolRAG retrieves relevant tools from the tool universe. 
-Virtual ToolRAG simulates retrieving tools that are already in the Function List."""
+Virtual ToolRAG simulates retrieving tools that are already in the Function List.""",
+            final_answer_format=json.dumps(
+                {
+                    "reasoning": "...",
+                    "function_calls": [
+                        {"name": "...", "arguments": {"param": "..."}}
+                    ],
+                    "final_answer": ""
+                },
+            ),
         )
         prompt = prompt_template.format(**context)
         result = await self.use_llm_func(prompt, response_format={"type": "json_object"})
-        try:
-            result_json = json.loads(result)
-            return result_json.get("reasoning", ""), result_json.get("tools", [])
-        except json.JSONDecodeError:
-            logger.warning(f"无法解析LLM返回的JSON: {result}")
-            return result, []
+        print("\033[31mSOLVER Result: \033[0m", result)
+        # try:
+        data = json.loads(result)
+        reasoning = data.get("reasoning", "")
+        tools = data.get("function_calls", [])
+        print("Extracted Tools: ", tools)
+        fcall_str = json.dumps(tools, ensure_ascii=False, indent=2) if tools else "[]"
+        return reasoning, fcall_str
+        # except json.JSONDecodeError:
+        #     logger.warning(f"无法解析LLM返回的JSON: {result}")
+        #     return result, []
 
     async def generate(self, question: str) -> tuple[list[str], str]:
         reasoning_trace: list[str] = []
         tool_trace: list[str] = []
+
+        print("Init Tools: ")
         init_tools = await self.init_tools(question)
+
         trigger = 0
         final_answer = ""
-
+        Tooluniverse = tooluniverse.ToolUniverse()
+        Tooluniverse.load_tools()
+        
         for i in range(self.max_step):
             hint = await self.helper(question, reasoning_trace)
-            current_tools = list(set(init_tools + tool_trace))
-            reasoning, toolist = await self.thoughts(current_tools, question, reasoning_trace, hint)
+            print(f"Step {i+1} Hint: ", hint)
 
+            current_tools = list(set(init_tools + tool_trace))
+            print("Current Tools: ", current_tools)
+            reasoning, fcall_str = await self.thoughts(current_tools, question, reasoning_trace, hint)
+            print(f"\033[34mStep {i+1} Reasoning: \033[0m", reasoning)
+            print(f"\033[31mStep {i+1} Tool Call: \033[0m", fcall_str)
 
             reasoning_trace.append(reasoning)
-
-            if toolist and any(tool.lower() == "finish" for tool in toolist):
+            has_finish = any(
+                isinstance(c, dict) and str(c.get("name", "")).lower() == "finish"
+                for c in getattr(self, "last_function_calls", [])
+            )
+            if has_finish:
                 final_answer = reasoning
                 break
 
             retrieved_content = ""
-            Tooluniverse = tooluniverse.ToolUniverse()
-            Tooluniverse.load_tools()
-            for tool in toolist:
-                try:
-                    func_call = [{"name": tool, "parameters": {}}]
-                    fcall_str = json.dumps(func_call)
-                    function_call_json, _ = Tooluniverse.extract_function_call_json(fcall_str)
+            
+            if fcall_str:
+                function_call_json = Tooluniverse.extract_function_call_json(
+                    fcall_str,
+                    verbose=True
+                )
+            
 
-                    if function_call_json and isinstance(function_call_json, list):
-                        for func in function_call_json:
-                            result = Tooluniverse.run_one_function(func)
-                            retrieved_content += f"\nTool {tool} Call Result: {str(result)}"
-                    else:
-                        retrieved_content += f"\nTool {tool} Format Error."
-                except Exception as e:
-                    retrieved_content += f"\nTool {tool} Execute Error: {str(e)}"
+            call_results = []
+            if function_call_json is not None and isinstance(function_call_json, list):
+                for func in function_call_json:
+                    print(f"Tool Call: {func}")
+                    call_result = Tooluniverse.run_one_function(func)
+                    print(f"Tool Call Result: {call_result}")
+                    call_id = Tooluniverse.call_id_gen()
+                    func["call_id"] = call_id
+                    call_results.append({
+                        "role": "tool",
+                        "content": json.dumps({"content": call_result, "call_id": call_id})
+                    })
+            revised_messages = [{
+                "role": "assistant",
+                # "content": message.strip(),
+                "tool_calls": json.dumps(function_call_json)
+            }] + call_results
+            retrieved_content += normalize_to_text(revised_messages)
 
-            # 判断工具结果是否有用
             if retrieved_content:
                 flag = await self.judge_tools(question, hint, retrieved_content)
+                print(f"Step {i+1} Judge Tool Result: ", flag)
 
+                data = json.loads(fcall_str)
+                toolist = [item['name'] for item in data]
+                tool_trace.extend(toolist)
                 if flag:
                     useful_info = await self.extract_useful_info(question, hint, retrieved_content)
+                    print(f"Step {i+1} Useful Info: ", useful_info)
                     reasoning_trace.append(f"useful info: {useful_info}")
-                    tool_trace.extend(toolist)
                     trigger = 0
                 else:
-                    tool_trace.extend(toolist)
                     trigger += 1
 
                 if trigger > 1:
                     new_tools = await self.toolrag(" ".join(reasoning_trace))
+                    print("New Tools from ToolRAG: ", new_tools)
                     init_tools = list(set(init_tools + new_tools))
                     trigger = 0
 
@@ -280,3 +344,19 @@ Virtual ToolRAG simulates retrieving tools that are already in the Function List
             final_answer = f"In {self.max_step} step, get Answer: " + "; ".join(reasoning_trace[-3:])
 
         return reasoning_trace, final_answer
+
+
+
+if __name__ == "__main__":
+    solver = Solver()
+    quetion = ""
+    file_path = r"/home/yongjie/Kunhong/CureBench/data/curebench_valset_pharse1.jsonl"
+    with open(file_path, "r", encoding="utf-8") as f:
+        first_line = json.loads(f.readline())
+        q = first_line.get("question", "")
+        opts = first_line.get("options", {})
+        question = q.strip() + "\n" + "\n".join([f"{k}. {v}" for k, v in opts.items()])
+        print(question)
+    loop = always_get_an_event_loop()
+    response = loop.run_until_complete(solver.generate(question))
+    print("response: ", response)

@@ -2,7 +2,6 @@
 # Author:	Wang Yongjie
 # Email:	yongjie.wang@ntu.edu.sg
 # Date:		Thu 02 Oct 2025 02:47:30 PM CST
-
 PROMPTS = {}
 GRAPH_FIELD_SEP = "<SEP>"
 PROMPTS["DEFAULT_TUPLE_DELIMITER"] = "<|>"
@@ -17,18 +16,16 @@ Question: {question}
 Reasoning: {reasoning}
 
 Next reasoning step(hints only): 
-Output: 
 """
 
 PROMPTS["init_tools"] = """
-
-
+Please select the most relevant tools from the provided tool list to help answer the clinical/medical question. You should consider the nature of the question and the capabilities of each tool to make your selection.
 Given Input:
 Question: {question}
 Tool lists: {list_of_tools}
 
-Selected Tools (seperated by comma):
 Output:
+Selected Tools (json): {selected_tools_format}
 """
 
 PROMPTS["solver"] = """
@@ -41,21 +38,20 @@ Guidelines:
     – If the tool you need is in the Function List below, you must retrieve them using a
     virtual ToolRAG call that simulates obtaining the tool through ToolRAG.
     – If the tool you need is not in the Function List below, you need to call ToolRAG.
-    – {Description of ToolRAG and virtual ToolRAG tools}
+    – {Description_of_ToolRAG_and_virtual_ToolRAG_tools}
 • Do not answer the question based on general knowledge. You must answer the question based on the information returned by the tools.
 • If all previous solution attempts have failed, do not repeat the same thoughts and function calls. Instead, come up with new solution approaches.
 
 Given Input: 
 Function List: {description}
-Reasoning step (json): {reasoning step format}
-Previous reasoning steps: {previous multi-step reasoning trace}
+Reasoning step (json): {reasoning_step_format}
+Previous reasoning steps: {previous_multi_step_reasoning_trace}
 Hint for next step: {hint}
 Question: {question}
 For the final step, respond in this JSON format, providing the final answer and a detailed
 
 Output:
-Final Answer (json): {final answer format}
-reasoning process: 
+Final Answer (json): {final_answer_format}
 """
 
 PROMPTS["judge_tool"] = """
@@ -66,8 +62,8 @@ Question: {question}
 Hint: {hint}
 Retrieved content: {retrieved_content}
 
-Is the retrieved content useful for answering the question? Answer "True" or "False".
-Output:
+Is the retrieved content useful for answering the question? 
+Output (json): {judge_format}
 """
 
 
@@ -82,3 +78,4 @@ Retrieved content: {retrieved_content}
 Provide the useful information extracted from the retrieved content:
 output:
 """
+
