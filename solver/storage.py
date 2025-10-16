@@ -11,12 +11,12 @@ from dataclasses import dataclass
 from collections import Counter, defaultdict
 from typing import Any, Union, cast
 from nano_vectordb import NanoVectorDB
-from base import (
+from .base import (
     StorageNameSpace,
     BaseVectorStorage,
     BaseLexicalStorage
 )
-from utils import (
+from .utils import (
     logger,
     set_logger,
     compute_mdhash_id

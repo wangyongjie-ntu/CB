@@ -7,7 +7,7 @@ import bm25s
 import numpy as np
 from dataclasses import dataclass, field
 from typing import TypedDict, Union, Literal, Generic, TypeVar
-from utils import EmbeddingFunc
+from .utils import EmbeddingFunc
 
 T = TypeVar("T")
 

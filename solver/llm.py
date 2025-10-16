@@ -8,7 +8,7 @@ from tenacity import (
     retry_if_exception_type,
 )
 import os
-from utils import wrap_embedding_func_with_attrs, always_get_an_event_loop,limit_async_func_call
+from .utils import wrap_embedding_func_with_attrs, always_get_an_event_loop,limit_async_func_call
 
 global_openai_async_client = None
 global_vllm_async_client = None

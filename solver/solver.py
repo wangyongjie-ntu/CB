@@ -13,23 +13,23 @@ from functools import partial, wraps
 from typing import Callable, Dict, List, Optional, Type, Union, cast
 
 # from tool import Tool
-from prompt import PROMPTS
-from base import (
+from .prompt import PROMPTS
+from .base import (
     StorageNameSpace,
     BaseVectorStorage,
     BaseLexicalStorage
 )
-from storage import (
+from .storage import (
     NanoVectorDBStorage,
 )
-from utils import (
+from .utils import (
     EmbeddingFunc,
     compute_mdhash_id,
     limit_async_func_call,
     always_get_an_event_loop,
     logger,
 )
-from llm import (
+from .llm import (
     gpt_4o_complete,
     gpt_41_mini_complete,
     openai_embedding,
